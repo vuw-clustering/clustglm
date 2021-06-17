@@ -1,0 +1,42 @@
+importFrom("graphics", "axis", "box", "contour", "lines", "plot",
+             "points", "text","legend","par")
+importFrom("stats", "as.hclust", "cutree", "dist", "fitted", "formula",
+           "glm", "hclust", "kmeans", "model.matrix", "pbinom", "dbinom",
+           "pnorm", "qnorm", "ppois", "dpois", "runif", "coef", "summary.lm", 
+           "terms", "drop.terms", "reformulate")
+importFrom("utils", "str")
+importFrom("MASS", "eqscplot", "glm.nb")
+importFrom("cluster", "diana")
+
+export(clustglm)
+## export(biclustglm)
+## export(clustbiplot)
+## export(clustglm.nb)
+export(mat2df)
+export(ordplot)
+export(profileplot)
+export(comparison)
+export(findpars)
+export(findQR)
+export(findRQR)
+export(findstart)
+export(dkm)
+export(randpart)
+## export(AIC)
+## export(BIC)
+export(logit.fn)
+export(expit.fn)
+export(M_step)
+export(E_step)
+export(xlogx.fn)
+export(qqunif)
+## export(log.fn)
+
+S3method(print, clustglm)
+S3method(summary, clustglm)
+S3method(print, summary.clustglm)
+S3method(logLik, clustglm)
+## S3method(AIC, clustglm)
+## S3method(BIC, clustglm)
+
+## Do I need the last few lines again when I do clustglm.nb?
