@@ -1,1 +1,4 @@
-is.unique <- function(x) length(x)==length(unique(x))
+is.unique <- function(x) {
+    length(x)==length(unique(x))
+}
+
