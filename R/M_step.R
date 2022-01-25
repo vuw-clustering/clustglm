@@ -43,9 +43,8 @@ M_step <- function(family, formula, response,
 
     Nlong <- nrow(long.df)
     long.df$wts <- rep(1,Nlong)
-    if ((family == "binomial")&(is.vector(response)))
+    if ((family == "binomial")&(is.vector(response))&!is.null(long.df$weights))
         long.df$wts <- long.df$weights
-    wts <- long.df$wts
     ## Already have prior weights from std.glm, either 1 or ntrials
     wts <- long.df$wts
     pp1 <- rep(1,Nlong)
