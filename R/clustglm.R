@@ -1,15 +1,11 @@
-## clustglm.R
-## -----------
-## Version 1.4
-## clustglm function only
-## See somefun.R for other functions, including replacedefaults
+## cg.R
+## ----
 
-######################################################
+## Modifying clustglm Version 1.6 for Thuong's binomial data and RQR.
+## Will be incorporated automatically in Version 1.7.
+## Two functions are being modified.
 
-
-
-## Model fitting function:
-## -----------------------
+replacedefaults <- function (default, user) replace(default, names(user), user)
 
 clustglm <- function(formula,
                      family = c("gaussian", "binomial", "poisson"),
@@ -119,14 +115,30 @@ clustglm <- function(formula,
                     cat("NOTE: All responses are 0 or 1; we assume binary data from single trials\n")
             }
         }
-        ## (ii) Response data on interval [0,1], prob. success.
-        ## Check if outside interval.
+        ## (ii) Response data proportions or nsucc.
         if (is.numeric(response)){
-            if ((max(response)>1) | (min(response) < 0)){
-                stop("All responses should be probabilities, in the interval [0,1]")
+            ## Check if in interval [0,1]:
+            if (all(response >= 0) & all(response <= 1)){
+                if (!(all(response %in% c(0,1)))){
+                    if (is.null(data$ntrials)){
+                        data$ntrials <- rep(1, nrow(data))
+                        if (verbose > 0){
+                            cat("NOTE: Responses are proportions; single trials assumed\n")
+                            cat("All ntrials = 1\n")
+                        }
+                    }
+                }
+            }
+            ## Check if outside interval.
+            if (max(response) > 1){
+                data$nsucc <- response
+                if (is.null(data$ntrials)){
+                    cat("If response is number of successes, ntrials must be given\n")
+                    stop("All responses should be probabilities, in the interval [0,1]")
+                }
             }
         }
-        ## (iii) Response data is a call: cbind(nsucc, nfail).
+        ## (iii) Response data is a call (to a matrix): cbind(nsucc, nfail).
         if (class(attr(terms(fo),"variables")[[2]]) == "call"){
             response.call <- attr(terms(fo),"variables")[[2]]
             attach(data)
@@ -370,11 +382,9 @@ clustglm <- function(formula,
             if (verbose > 1) cat("Checking given starting allocation\n")
             if (is.matrix(alloc.start)){
                 if (nf4c == 1) alloc.start <- list(pp.mat = alloc.start)
-                if (nf4c == 2)
-                    stop("For biclustering, please supply two starting allocation matrices")
+                if ((nf4c == 2)&(!is.list(alloc.start)))
+                    stop("For biclustering, please supply two starting allocation matrices as a list")
             }
-            if (!is.list(alloc.start))
-                stop("Please supply initial allocations to clusters as a list")
             if ((is.list(alloc.start))&(length(alloc.start) != nf4c))
                 stop(paste("List of initial allocations should be of length",nf4c))
             if ((is.list(alloc.start))&(length(alloc.start) == nf4c)){
@@ -434,7 +444,7 @@ clustglm <- function(formula,
             ## Build SS.df for self-start.
             SS.df <- data.frame(Qres = temp.df$Qres,
                                 facA = temp.df$facA, facB = temp.df$facB)
-            cat("Built SS.df")
+            if (verbose >0) cat("Built self-start dataframe")
         }
 
 
@@ -824,7 +834,8 @@ clustglm <- function(formula,
                           deviance = this.glm$deviance,
                           null.deviance = this.glm$null.deviance,
                           weights = this.glm$weights,
-                          df.residuals = this.glm$df.residual,
+                          prior.weights = this.glm$prior.weights,
+                          df.residual = this.glm$df.residual,
                           df.null = this.glm$df.null,
                           y = this.glm$y,
                           model = this.glm$model,
@@ -833,6 +844,10 @@ clustglm <- function(formula,
                           terms = this.glm$terms,
                           data.in = data,
                           data = this.glm$data)
+
+        if (!is.null(this.glm$qr)) model.out$qr <- this.glm$qr
+        if (!is.null(this.glm$R)) model.out$R <- this.glm$R
+        if (!is.null(this.glm$effects)) model.out$effects <- this.glm$effects
 
         ## Overwrite terms in model.out for a clustglm object:
         model.out$formula <- formula
@@ -844,7 +859,9 @@ clustglm <- function(formula,
         model.out$LLint <- LLint
         model.out$LLc <- LLc
         model.out$AIC <- -2*LLint + 2*npar
+        model.out$aic <- model.out$AIC
         model.out$BIC <- -2*LLint + npar*log(Nobs)
+        model.out$bic <- model.out$BIC
         model.out$fact4clust <- fact4clust
         model.out$clustfactnames <- clustfactnames
         model.out$nclust <- nclust
@@ -856,13 +873,15 @@ clustglm <- function(formula,
         for (cf in 1:nf4c) {
             names(pi.list[[cf]]) <- levels(long.df[,cf.colno[cf]])
         }
-        model.out$pi.list <- pi.list
+        if (nf4c == 2) model.out$pi.list <- pi.list
+        if (nf4c == 1) model.out$pi.ests <- pi.list[[1]]
         names(pp.list) <- clustfactnames
         for (cf in 1:nf4c) {
             dimnames(pp.list[[cf]]) <- list(levels(long.df[,f4c.colno[cf]]),
                                             levels(long.df[,cf.colno[cf]]))
         }
         model.out$pp.list <- pp.list
+        if (nf4c == 1) model.out$pp <- pp.list[[1]]
         model.out$final.glm <- this.glm
 
         ## Add unconditional fitted values (ufits) to output:
@@ -1004,8 +1023,8 @@ clustglm <- function(formula,
         }
         ## Save fixed-part model:
         model.out$fixed.part.model <- fixed.out
+        ## Finished model.out for clustered model.
     }
-    ## Finished model.out for clustered model.
 
     class(model.out) <- c('clustglm','glm')
 

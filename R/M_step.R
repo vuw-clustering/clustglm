@@ -160,11 +160,11 @@ M_step <- function(family, formula, response,
     LLint <- LLc
 
     ## Add entropy term(s):
-    
-    LLint <- LLint + sum(xlogx.fn(c(pp.list[[1]])))
+
+    LLint <- LLint - sum(xlogx.fn(c(pp.list[[1]])))
 
     if (length(nf4c) == 2)
-        LLint <- LLint + sum(xlogx.fn(c(pp.list[[2]])))
+        LLint <- LLint - sum(xlogx.fn(c(pp.list[[2]])))
 
     return(list(pi.list = pi.list, pp.list = pp.list,
                 LLc = LLc, LLint = LLint,

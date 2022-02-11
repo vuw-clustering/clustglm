@@ -1,12 +1,12 @@
 Package: clustglm
 Type: Package
 Title: Clustering Using Finite Mixtures
-Version: 1.6
+Version: 1.7.1
 Depends: R (>= 3.5.0)
 Imports: graphics, utils, stats, MASS, cluster
 Suggests: knitr, ade4
 VignetteBuilder: knitr
-Date: 2021-06-17
+Date: 2022-02-11
 Authors@R: c(person("Shirley", "Pledger", role = c("aut", "cre"),
 	   	     email = "shirley.pledger@vuw.ac.nz"),
 	     person("Richard", "Arnold", role = "aut"),
@@ -20,7 +20,7 @@ License: GPL (>= 2)
 LazyData: yes
 URL: https://www.r-project.org
 NeedsCompilation: no
-Packaged: 2021-06-16 21:43:16 UTC; shirley
+Packaged: 2022-02-11 21:43:16 UTC; louise
 Author: Shirley Pledger [aut, cre],
   Richard Arnold [aut],
   Lloyd Pledger [ctb],

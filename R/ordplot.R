@@ -22,10 +22,10 @@ ordplot <- function(model, ord.factor, clust.factor,
     clust.f <- long.df[,(1:ncol(long.df))[clust.factor == names(long.df)]]
     nx <- length(unique(ord.f))
     ncl <- length(unique(clust.f))
-    if (this.model$family == "poisson")
+    if (this.model$family$family == "poisson")
         if (!(ncl == 3))
             stop("For Poisson family data use three clusters")
-    if (!(this.model$family == "poisson"))
+    if (!(this.model$family$family == "poisson"))
         if (!(ncl == 2))
             stop("For non-Poisson data use two clusters")
     
@@ -36,7 +36,7 @@ ordplot <- function(model, ord.factor, clust.factor,
     ## Needs to be ord.factor by clust.factor
     if (all(rownames(gam.mat)[1:2] == levels(clust.f)[1:2]))
         gam.mat <- t(gam.mat)
-    if (this.model$family == "poisson"){
+    if (this.model$family$family == "poisson"){
         psi.mat <- exp(gam.mat)
         pp.mat <- this.model$pp.list[[1]]
         prop.vec <- apply(pp.mat,2,mean)
@@ -62,7 +62,7 @@ ordplot <- function(model, ord.factor, clust.factor,
         lines(c(0,0),range(plotpts.mat[,2]),lty=5,col="grey")
         text(plotpts.mat[,1:2],pt.labels,cex=1.3)
     }
-    if (!(this.model$family == "poisson")){
+    if (!(this.model$family$family == "poisson")){
         ## Have ncl = 2
         stop("Ordplot not yet implemented for non-Poisson data")
         ## Supply a main title:
