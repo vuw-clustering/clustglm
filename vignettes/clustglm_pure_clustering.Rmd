@@ -1,0 +1,200 @@
+---
+title: "Performing pure clustering with clustglm"
+author: "Louise McMillan"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", fig.width=5, fig.height=5)
+
+library(clustglm)
+```
+
+```{r, include=FALSE}
+library(knitr)
+opts_knit$set(global.par = TRUE) ## Set package option for knitr -- this is NOT the same as changing the chunk options like we did above with opts_chunk$set
+```
+
+```{r, include=FALSE}
+par(mar=c(3,3,0.75,0.75),mgp=c(2,0.7,0)) # set narrower plot margins (must be in a separate chunk to the calls to plot, because of the way the global.par option works in knitr)
+``` 
+
+This is a vignette describing how to perform clustering without other factor effects, using the `clustglm` package. 
+
+`clustglm` was designed to allow users to run generalized linear models to analyse the effects of predictor variables on binary, count or continuous response variables and include the effects of any detected clusters of observations or predictor variables. 
+
+However, it is possible to use models that only detect clusters, without including any other effects.
+
+This vignette contains demonstrations of how to apply `clustglm` to simulated binary data to detect row clusters, or row and columns clusters (biclustering).
+
+# Row clustering
+
+```{r, include=FALSE}
+construct_row_membership <- function(N,pi_r) {
+    R <- length(pi_r)
+    if (R == 1) row_membership <- rep(1,times=N)
+    else {
+        row_membership <- vector()
+        for (rr in 1:(R-1)) {
+            row_membership <- c(row_membership,rep(rr,round(N*pi_r[rr])))
+        }
+        remaining <- N - length(row_membership)
+        row_membership <- c(row_membership, rep(R,remaining))
+    }
+    row_membership
+}
+
+construct_col_membership <- function(M,kappa_c) {
+    C <- length(kappa_c)
+    if (C == 1) col_membership <- rep(1,times=M)
+    else {
+        col_membership <- vector()
+        for (cc in 1:(C-1)) {
+            col_membership <- c(col_membership,rep(cc,round(M*kappa_c[cc])))
+        }
+        remaining <- M - length(col_membership)
+        col_membership <- c(col_membership, rep(C,remaining))
+    }
+    col_membership
+}
+
+construct_dat <- function(N,M,theta,row_membership,col_membership) {
+    dat_rows <- lapply(1:N,function(i) {
+        dat_cols <- sapply(1:M,function(j) rbinom(1,1,theta[row_membership[i],col_membership[j]]))
+    })
+    dat <- do.call(rbind,dat_rows)
+}
+
+construct_longdat <- function(dat) {
+    longdat <- mat2df(dat)
+    longdat$ntrials <- rep(1,nrow(longdat))
+    longdat$nsucc <- longdat$Y
+    longdat$nfail <- 1-longdat$Y
+    longdat
+}
+
+set.seed(1)
+
+    N <- 40
+    M <- 16
+    pi_r <- c(0.5,0.5)
+    kappa_c <- 1
+    theta <- matrix(c(0.9,0.1),nrow=length(pi_r),byrow=TRUE)
+    row_membership <- construct_row_membership(N=N,pi_r=pi_r)
+    col_membership <- construct_col_membership(M=M,kappa_c=kappa_c)
+    dat <- construct_dat(N=N,M=M,theta=theta,row_membership=row_membership,
+                         col_membership=col_membership)
+```
+
+This is an example dataset with 40 rows of observations, and 16 columns, with each entry in the matrix being a binary, 0 or 1. The columns can be thought of as 30 different binary response variables.
+
+The columns could be thought of as different species of animals, and the matrix entries represent whether or not that species was observed.
+
+The data was generated in 2 clusters: cluster #1 contains the first 20 rows, and cluster #2 contains the last 20 rows. When generating the binary values, the probability of getting the 1 value was 0.9 in every column for all rows in cluster #1 and 0.1 in every column for all rows in cluster #2.
+
+Using the notation of Pledger and Arnold (2014), we have parameters $\theta_{rj}$ and $\theta_{1j} = 0.9$ and $\theta_{2j} = 0.1$ for all j in $1,2,\ldots,16$.
+
+```{r}
+dat
+```
+
+The first step in the process is to convert the data into the long format, with 1 row for every cell in the matrix, and 1 column giving the indices of the original rows in the matrix, and 1 column giving the indices of the original columns in the matrix.
+
+```{r}
+longdat <- mat2df(dat)
+longdat
+```
+
+Then we convert the binary data to binomial data, which is one of the available distribution families in the `clustglm` package. Every entry has 1 trial, and the binary value is the number of successes.
+
+```{r}
+longdat$ntrials <- rep(1,nrow(longdat))
+longdat$nsucc <- longdat$Y
+longdat$nfail <- 1-longdat$Y
+longdat
+```
+
+Now we can apply row clustering to this dataset. Since the column in the long format that gives the indices of the rows in the original matrix is called "ROW", that is the name of the factor that we want to cluster, i.e. `fact4clust="ROW"`. 
+
+And we want `clustglm` to create a clustered factor called `rowclust`, which we then use as the sole predictor in our formula, i.e. `clustfactnames="rowclust"` and the formula is `Y~rowclust`, where Y is the name of the column in the long format that contains the values that were in the cells of the original matrix.
+
+At this stage we test the algorithm, specifying that we want 2 row clusters.
+
+```{r, include=FALSE}
+set.seed(1)
+```
+
+```{r, results="hide"}
+row2clustonly.out <- clustglm(Y~rowclust, family="binomial", data=longdat,
+                                  fact4clust = "facA", nclus=2, clustfactnames = "rowclust",
+                                  start.control = list(randstarts=10))
+```
+
+The results can be summarized using the standard `summary` command:
+
+```{r} 
+summary(row2clustonly.out)
+```
+
+and we can check whether the rows have been correctly assigned to the clusters by printing out the posterior probabilities of membership of the two clusters:
+
+```{r}
+round(row2clustonly.out$pp.list$rowclust,2)
+```
+
+The first half of the rows have probability 1 of membership of row cluster 1, and the second half of the rows have probability 1 of membership of row cluster 2. Note that the results would still be correct if the first half had probability 1 for row cluster 2, and the second half had probability 1 for row cluster 1, because the clustering algorithm doesn't know which cluster is which, so the clusters could be renamed to the correct clusters.
+
+# Biclustering
+
+The following code generates a simulated dataset with two row clusters, and two column clusters, and an interaction between the row and column clusters:
+
+```{r}
+N <- 40
+M <- 16
+pi_r <- c(0.5,0.5)
+kappa_c <- c(0.25,0.75)
+theta <- matrix(c(0.9,0.1,0.3,0.7),nrow=length(pi_r),byrow=FALSE)
+row_membership <- construct_row_membership(N=N,pi_r=pi_r)
+col_membership <- construct_col_membership(M=M,kappa_c=kappa_c)
+dat <- construct_dat(N=N,M=M,theta=theta,row_membership=row_membership,
+                     col_membership=col_membership)
+```
+
+The `clustglm` code for biclustering is slightly more complicated, in that now we have two elements for each of `fact4clust`, `nclus` and `clustfactnames`, where the first element for each input parameter corresponds to the row clustering, and the second element corresponds to the column clustering.
+
+We fit 2 clusters for the rows and 2 clusters for the columns.
+
+We fit row clusters and column clusters, allowing for interaction between the clusters, using the formula `Y~rowclust*colclust`. If we did not want to model any interactions between the row and column clusters, we would use `Y~rowclust+colclust`.
+
+```{r, include=FALSE}
+longdat <- mat2df(dat)
+longdat
+
+longdat$ntrials <- rep(1,nrow(longdat))
+longdat$nsucc <- longdat$Y
+longdat$nfail <- 1-longdat$Y
+longdat
+
+set.seed(1)
+```
+
+```{r, results="hide"}
+row2clustonly.out <- clustglm(Y~rowclust*colclust, family="binomial", data=longdat,
+                                  fact4clust = c("ROW","COL"), nclus=c(2,2), 
+                                  clustfactnames = c("rowclust","colclust"),
+                                  start.control = list(randstarts=10))
+```
+
+And again we can check whether the rows and columns have been assigned correctly by checking the posterior probabilities of membership for the row and column clusters. Here, the column cluster results are correct up to renaming of the two clusters. There is one incorrectly assigned row for the row cluster results, row 24.
+
+```{r}
+round(row2clustonly.out$pp.list$rowclust,2)
+round(row2clustonly.out$pp.list$colclust,2)
+```
+
+Note that you can always choose to use different names than `rowclust` and `colclust`, but you must make sure that the names you specify in `clustfactnames` are the same ones that you use in the formula.

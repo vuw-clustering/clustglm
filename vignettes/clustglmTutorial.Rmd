@@ -1,0 +1,495 @@
+---
+title: "clustglm Tutorial"
+author: "Shirley Pledger"
+date: "`r Sys.Date()`"
+output: 
+  pdf_document:
+    toc: yes
+    toc_depth: 4
+vignette: >
+  %\VignetteIndexEntry{clustglm Tutorial}
+  %\VignetteEngine{knitr::rmarkdown}
+  \usepackage[utf8]{inputenc}  
+---
+<!-- # ```{r , include=FALSE} -->
+<!-- # knitr::opts_chunk$set(eval=FALSE) -->
+<!-- # ``` -->
+
+# Introduction
+
+The package **clustglm** uses a function `clustglm()` to link finite-mixture clustering and biclustering (Pledger and Arnold, 2014) with generalized linear models (McCullagh and Nelder, 1989). A data frame with a response variable **Y** and factor **A** may have the levels of **A** clustered to share parameters in a generalized linear model. This has long been regarded as a good alternative to the multiple comparison procedures used in ANOVA (O'Neill and Wetherill, 1971). Similar **single-mode clustering** may be done for other factors, **B**, **C**, etc. Further, a simultaneous clustering of the levels of **A** and **B** (a **biclustering**) may also be done. All the usual model fitting and parameter estimates (as in the function `glm()`) are available, together with posterior probabilities for classification of the factor levels from using finite mixture models (see e.g. McLachlan and Basford, 1988). Covariates **X_1**, ... **X_q**, whether categorical or numerical, may also be included in the model formula. Advantages of this combination of mixtures and generalized linear models include the model-comparison methodology arising from likelihood-based analyses and the extension from Gaussian models to other members of the exponential family.
+
+The section **Overview of package `clustglm`** has details of the inputs, algorithm and functions used in the package `clustglm`. **Example 1: Cottontail rabbit recaptures** has binomial data supplied as a data frame. The next section, **The functions `mat2df` and `clustglm`**, gives more detail about data entry and the options in `clustglm()`. This is followed by a more substantial example, **Example 2: Bird counts**,  which has Poisson data supplied as a matrix of counts, together with covariates for the rows (sites) and columns (species).
+
+
+# Overview of package `clustglm`
+
+## Inputs
+
+The function `clustglm` takes as input a data frame with columns of a response variable from the exponential family and factors and/or continuous predictor variables. One or two factors may have their levels clustered using finite mixtures. For instance, in Example 2 the response is the count of the number of occurrences of **species** $b$ ($b = 1 \ldots B$) at **site** $a$ ($a = 1 \ldots A$); here Factor $\cal{A}$ is **site** and factor $\cal{B}$ is **species**. A pattern detection model might allow for individual **site** effects (rich versus poor) and **species** effects (common versus rare) and then look for a broad overview of the interaction of species clusters by site clusters, indicating which groups of species occur most frequently and which groups of sites (Pledger and Arnold, 2014). The model equation
+
+ `count ~ site + species + siteclust:speciesclust`
+
+specifies this structure while at the same time signalling that two new factors are to be constructed, one clustering the sites and one clustering the species. The full command may look like this:
+
+```{r ex0, results="hold", cache=TRUE, eval=FALSE}
+clustglm(formula = count ~ site + species + siteclust:speciesclust,
+         family = "poisson",
+	 data = avi.df,
+	 fact4clust = c("site","species"),
+	 nclust = c(2,2),
+	 clustfactnames = c("siteclust","speciesclust"),
+	 start.control = list(randstarts = 100))
+```
+
+The arguments `formula`, `family` and `data` are the same as for the function `glm()`, while the next four arguments state which factors are to be clustered, how many clusters are required, give names for the new (clustered) factors and specify how many random starts to try. The log likelihood surface with finite mixtures is generally multimodal, so multiple starts attempt to find a global rather than local maximum.
+
+## The `clustglm()` algorithm
+
+1. Initialise the cluster membership:
+
+* EITHER for each random start, run the EM algorithm (Dempster, Laird and Rubin, 1977) for a few cycles (default 3) to start a climb up the nearest hill in the log likelihood surface. Save the posterior probabilities for the highest log likelihood reached so far,
+
+* OR use some other clustering method to find a sensible starting allocation of factor levels to clusters, using (e.g.) the function `findstart()` or posterior probabilities from some previously fittd model.
+
+2. Use the saved allocation as the start for a full EM algorithm. By default the EM runs until the log likelihood and all parameter estimates are stable to 4 decimal places or there have been 100 EM cycles, whichever happens first. These defaults may be changed in an argument `EM.control`.
+
+If the resulting fitted model is assigned the name (e.g.) `model.1.out`, the function `names(model.1.out)` gives access to detailed results.
+
+
+## Functions of clustglm
+
+| Function | Purpose                                                   |
+|---------|------------------------------------------------------------|
+| `AIC` | generic function for `clustglm` object(s) |
+| `BIC` | generic function for `clustglm` object(s) |
+| `clustbiplot`  | draw a clustglm-based biplot displaying the patterns from a biclustered model |
+| `clustglm` | fit a `clustglm` model using the EM algorithm |
+| `comparison`  | for two or more models, tabulate log likelihood, npar, AIC, BIC |
+| `dkm` | use double k-means to find a good initialisation for biclustering |
+| `findpars` | find weighted sum-to-zero parameter estimates from a model |
+| `findstart` | use other clustering methods to find good starts for EM-based model fitting | 
+| `mat2df`   | convert a matrix to a dataframe for input to `clustglm()` |
+| `ordplot` | display an ordination of one factor using a two- or three-group clustering of another factor |
+| `profileplot`| use `clustglm` output to display profiles of a clustered factor over another factor |
+| `summary` | generic function for a `clustglm` object |
+
+
+## Data structure
+
+Data for `clustglm()` are provided as a data frame, just as for `glm()`. The dataframe should have one row for each observation, and include as columns the response variable(s) and at least one categorical (factor) predictor variable.
+
+
+
+# Example 1: Cottontail rabbit recaptures
+
+This example illustrates the analysis of binomial data with a single factor, the levels of which are to be clustered. Edwards and Eberhardt (1967) presented a closed-population capture-recapture data study with 18 samples of a population of cottontail rabbits (*Sylvilagus floridanus*). Each of the 76 rabbits caught at least once has a capture history vector of length 18 containing a 1 at each sample when caught, otherwise zero. The individuals may be clustered by their propensity for recapture, using a binomial model where for each individual `nsucc` is the number of recaptures after the first, `ntrials` is the number of remaining occasions for possible recapture and `nfail = ntrials - nsucc` is the number of failures to recapture. The data frame `cottontails` with four columns, `ID` (a factor to identify individuals), `nsucc`, `nfail` and `ntrials` has only 74 rows, as two individuals were first caught at Sample 18 and hence had no opportunities for recapture. A preliminary `glm()` null model is fitted, assuming all individuals have the same constant probability of recapture.
+
+```{r ex1a, results="hold", cache=TRUE, eval=FALSE}
+data(cottontails)
+str(cottontails)
+glm.null <- glm(formula = cbind(nsucc,nfail) ~ 1,
+                data = cottontails,
+                family = "binomial")
+glm.null$deviance
+glm.null$rank    
+logLik(glm.null) 
+```
+
+Note that the deviance is **not** -2*logLik; this is because `glm()` omits a constant when reporting `logLik`. Models fitted using function `clustglm()` have the correct log likelihood as an item "LL" in the output list if there was no clustering. If there was clustering, then the model contains items "LLint", which is the incomplete-data log-likelihood, i.e. the standard log-likelihood, and "LLc", which is the complete-data log-likelihood as used to fit the clustering mixture model using the EM algorithm.
+
+```{r ex1b, results="hold", cache=TRUE, eval=FALSE}
+data(cottontails)
+str(cottontails)
+clustglm.null <- clustglm(formula = cbind(nsucc,nfail) ~ rep(1,74),
+                          data = cottontails,
+             	          family = "binomial")
+clustglm.null$deviance
+clustglm.null$rank    
+clustglm.null$LL      
+```
+
+This now has deviance = -2*LL. If AIC or BIC comparisons between clustered and unclustered models are required, use `clustglm()` for all the model fitting. This ensures the AIC and BIC are truly comparable, as all are based on the correct log likelihood.
+
+Now cluster the levels of factor **ID** into two clusters.
+
+```{r ex1c, results="hold", cache=TRUE, eval=FALSE}
+cg.2clust <- clustglm(formula = cbind(nsucc,nfail) ~ IDclust,
+                       family = "binomial",
+         	       data = cottontails,
+         	       fact4clust = "ID", nclust = 2,
+         	       clustfactnames = "IDclust",
+         	       start.control = list(randstarts = 100),
+         	       verbose = 1)
+names(cg.2clust)
+```
+
+Since this is single-mode clustering, the last item, **pp.list** has one item. It is a 74 by 2 matrix where element ($a$,$u$) is the estimated posterior probability of individual $a$ being in cluster $u$ ($u = 1, 2$). We may choose to allocate each individual to the cluster for which it has the highest posterior probability.
+
+```{r ex1d, results="hold", cache=TRUE, echo = TRUE, eval=TRUE}
+pp.mat <- cg.2clust$pp.list[[1]]
+split(rownames(pp.mat),apply(pp.mat,1,which.max))
+```
+
+A short exploration shows that those in Cluster 2 are approximately those with the highest individual estimates of capture probability:
+
+```{r ex1e, results="hold", cache=TRUE, eval=FALSE}
+cottontails$prob <- cottontails$nsucc/(cottontails$ntrials)
+plot(pp.mat[,2],cottontails$prob,type="n")
+text(pp.mat[,2],cottontails$prob,as.character(1:74))
+lines(c(0.5,0.5),c(0,0.4))
+text(0.2,0.35,"Cluster 1")
+text(0.7,0.35,"Cluster 2")
+```
+
+Attempts to find three clusters:
+
+```{r ex1f, results="hold", cache=TRUE, eval=FALSE}
+cg.3clust <- clustglm(formula = cbind(nsucc,nfail) ~ IDclust,
+                       family = "binomial",
+         	       data = cottontails,
+         	       fact4clust = "ID", nclust = 3,
+         	       clustfactnames = "IDclust",
+         	       start.control = list(randstarts = 100),
+         	       verbose = 1)
+```
+
+were able to find only slight increases in the log likelihood when compared with two clusters. An information-criteria comparison of models uses the function `comparison()` on a list of models.
+
+```{r ex1g, results="hold", cache=TRUE, eval=FALSE}
+model.list <- list(cg.null = clustglm.null,
+                   cg.2clust = cg.2clust,
+                   cg.3clust = cg.3clust)
+comparison(model.list)
+```
+
+```{r compare, echo = FALSE, eval = FALSE}
+comparison(model.list)
+```
+The two-cluster model is chosen as it has the lowest AIC (relative AIC = 0).
+
+
+
+# The functions `mat2df` and `clustglm`
+
+## `mat2df`
+
+If the data originate as an $A$ by $B$ matrix of same-type data (e.g. all counts, or all binary 0/1 responses) then each matrix cell corresponds to an observation. The function `mat2df` converts such a matrix to a long data frame with $AB$ rows; this is suitable for input to `clustglm`. Each cell of the matrix gives rise to one row of the data frame, with the observation in the cell becoming the corresponding response value in the data frame. By default `mat2df` names the response variable `Y` and the row and column factors **FactorA** and **FactorB**, but the user may overwrite these names (e.g. to **count**, **site** and **species**). Also `mat2df` optionally associates row- and column-covariate values with each observation, using supplied covariate data frames (e.g. a **site** by site factors data frame and/or a **species** by species traits data frame; see Example 2).
+
+In using `clustglm` on data converted from a matrix to a data frame, it is assumed that the matrix had row conditional independence (i.e. independence between rows and then conditionally between observations within each row) or its counterpart, column conditional independence.
+
+
+## `clustglm`
+
+
+Once the data frame is in the right format, models may be fitted using the `clustglm` function. If no clustering is specified, `clustglm` fits an ordinary `glm` object with the usual output. If clustering of factor levels is required, information must be supplied about which factor(s) to cluster, how many clusters are required, and the names of the clustered factors. All model fitting is performed by `clustglm`. Its current arguments are --
+
+```{r clustglmargs, echo = FALSE, eval = TRUE}
+str(args(clustglm))
+```
+
+The `family` argument reflects the type of data; the default ("gaussian") is unsuitable for count data, so the user needs to specify `family` as "poisson", "binomial" or "bernoulli". If the family is "bernoulli" it will be assumed that each count, 0 or 1, is the result of a single binomial trial. If the family is binomial, supply the vector of number of trials as a column labelled "ntrials" within the input data frame.
+
+The arguments `weights` and `offset` are currently unused: setting them will have no effect.
+
+
+### The `formula` argument
+
+Formula specification is the same as for `glm` (as in Examples 2a and 2f below), except that the formula may also include the names of new clustered factors as defined further down in the arguments to `clustglm` (Examples 1b to 1e). 
+
+
+### Specifying the clustering
+
+Three arguments, `fact4clust`, `clustfactnames` and `nclust`, are used to create clustered factor levels. If only one factor, e.g. "site", is to be clustered (single-mode clustering), each of these has only one value (Example 1b below). If two factors are to have their levels simultaneously clustered (biclustering), these three arguments each have two elements (Example 1d below).
+
+
+### Initial values for clustering, `start.control`
+
+With finite mixtures, multimodality of the likelihood surface requires that careful attention be paid to starting values. These are determined via the `start.control` list as described here. In the absence of specifications in `start.control`, just one random start will be used before moving to the EM algorithm. Options in the `start.control` list and their defaults are   
+
+ * `randstarts = 0`  -- replace 0 to specify the number of random starts, 
+ 
+ * `alloc = NULL ` -- replace NULL with a list specifying initial allocation matrices of factor levels to clusters,
+ 
+Useful initial allocation matrices may be done from knowledge of the field or results of similar modelling. However, if the response variable came from a matrix with equal number of observations in each cell (balanced data over factors `A` and `B`), other clustering methods may be used to provide intelligent starts (even though they are exact clusterings, not probabilistic). Three such methods for single-mode clustering are k-means, Hclust (hierarchical clustering) and Diana (divisive hierarchical clustering). See the function `findstarts()` for more information. For a start for biclustering, method `dkm` (double k-means) is recommended.
+
+For each start specified, whether from random or allocated starts, `clustglm` will give a short try (default three EM cycles) and choose the one which achieves the highest log likelihood (LL). Then the best point (after three cycles) is chosen as the start for the full EM algorithm. 
+
+### Control of EM optimization, `EM.control`
+
+This is a list of options with the following items:
+
+* `startEMcycles = 3`  -- for each start, the EM algorithm is run through a few (default = 3) cycles, and the log likelihood (LL) achieved is compared with the best LL so far. If this one is higher, it replaces the earlier best LL and the estimated parameters are stored for starting the full EM later.
+
+* `EMcycles = 100` -- the maximum number of cycles for the full EM algorithm.
+
+* `EMstoppingpar = 1e-04` -- the EM algorithm stops early if the LL and all parameter estimates are within 0.0001 of the previous estimate, in which case the EM algorithm is deemed to have converged. 
+
+### Verbosity
+
+Setting `verbose = 0` gives no information to screen as the algorithm is running, `verbose = 1` gives an indication of progress through the algorithm and `verbose = 2` gives copious information of progress and current values.
+
+
+
+# Example 2: Bird counts
+
+The second example in this vignette has a balanced design with count data **Y** from an `A` by `B` matrix of count data; the rows are factor $\cal{A}$ = **site** and the columns are factor $\cal{B}$ = **species**. It is a balanced data set, with one observation at each combination of factor levels (row number and column number). (In more general cases, the data need not come from a matrix and the design need not be balanced, with equal numbers of occurrences  of each combination of factor levels.)  
+
+This example uses a random subset of the 'aviurba' bird count data of Dolédec et al. (1996) included in the package [**ade4**](https://CRAN.R-project.org/package=ade4) (Dray and Dufour, 2007). Working through this example will enable the user to set up the data in the correct data frame format and then fit a range of clustered models.
+
+## Data frame construction from a response matrix
+
+The `aviurba` data set in package **ade4** contains a list of three data frames and a matrix. In package **clustglm** the data set 'avi' is a random subset of `aviurba`. The first item, `avi$fau`, is a 15 by 12 matrix-style data frame of bird counts over 15 sites for 12 bird species. The second, `avi$mil`, is a data frame of the 15 sites by 10 environmental variables. The third, `avi$traits`, is a data frame of the 12 species by four biological traits. The fourth item, `avi$species.names`, is a matrix containing the full names and name codes for the 12 species.
+
+
+```{r avi}
+library(clustglm)
+data(avi)
+names(avi)
+```
+
+The function `mat2df` is used to create a long data frame including all the information. The response data frame `avi.fau` is stretched out into a response vector "count", and a data frame is built with columns "count" followed by two factors indicating from which row ("site") and column ("species") of the matrix each response ("count") came. Following this are the optional covariate columns, xr.df for row-specific and xc.df for column-specific covariates.
+
+```{r mat2df}
+avi.df <- mat2df(y = avi$fau, xr.df = avi$mil, xc.df = avi$traits, 
+                 responsename = "count",
+		 factorname1 = "site", factorname2 = "species")
+head(avi.df)
+```
+
+Note that "site" and "species", originally the rows and columns of the response matrix, are now being treated as factors for modelling the response variable "count". If not specified in `mat2df`, the default is to label these factors "A" and "B".
+
+A selection of different possible models is presented below.
+
+
+
+## Example 2a: a generalized linear model with two main effects, no clustering
+
+```{r ex2a, results="hold", eval=FALSE}
+std2way.out <- clustglm(formula = count ~ site + species,
+   	                family = "poisson",
+			data = avi.df)
+summary(std2way.out)
+logLik(std2way.out)
+AIC(std2way.out)
+BIC(std2way.out)
+```
+
+This model allows for main effects of varying site richness and varying species abundance. It may be used as a baseline model for comparison with clustered models. The interaction terms introduced in later models will focus on pattern detection between sites and species after allowing for these main effects (known in multivariate analysis as a two-way standardization). Of interest now are remaining patterns of association between certain (types of) species and (types of) sites. The inclusion of a `site:species` term would give a saturated model; in order to reduce the number of parameters at least one of the two factors must be clustered for the interaction term.
+
+
+## Example 2b: site clustering using species patterns
+
+In this model, after allowing for main effects, a clustering of sites is included. We define a new factor "siteclust" to represents the clustered sites; each level of this factor corresponds to a cluster and the number of clusters is fixed by "nclust". The model formula contains an interaction term "siteclust:species" which specifies that the site clustering is driven by the patterns of changing species compositions over the sites.
+
+```{r ex2b, results="hold", cache=TRUE, eval=FALSE}
+site2clust.out <- clustglm(formula = count ~ site + species + siteclust:species,
+                           family = "poisson",
+			   data = avi.df,
+                           fact4clust = "site",
+			   nclust = 2,
+			   clustfactnames = "siteclust",
+                           start.control = list(randstarts = 100),
+                           verbose = 1)
+summary(site2clust.out)
+names(site2clust.out)
+site2clust.out$LLc
+site2clust.out$LLint
+site2clust.out$npar
+site2clust.out$AIC
+site2clust.out$BIC
+site2clust.out$pp.list
+```
+
+The use of commands `logLik(site2clust.out)`, `site2clust.out$rank`, `AIC(site2clust.out)` and `BIC(site2clust.out)` is not recommended as (i) the logLik function has dropped a constant term (so that logLik is no longer -residualDeviance/2) and (ii) the rank counts only the independent parameters estimated in the final internal M-step, and fails to count estimates of proportions of data in each level of the clustered factor(s). These have a flow-on effect to the AIC() and BIC() calculations. Instead use the next four lines where item extraction gives the correct LL, npar, AIC and BIC.
+
+The item **pp.list** is a list of posterior probabilities allocating factor levels to clusters. In this example only one factor, **site**, is clustered ("single-mode clustering") and so "pp.list" has only one item. If there were A sites, this is an A by 2 matrix where element *(a,u)* is the posterior probability that site *a* is in site cluster *u*. The rows of the posterior probability matrix each add to one; an exact allocation of site *a* to cluster *u* is shown by row *a* = (0,1), while (0.3,0.7) indicates a probabilistic allocation of row *a* with probability 0.3 to site cluster 1 and 0.7 to cluster 2. To view the allocations, use
+
+```{r pp.list, eval = FALSE} 
+round(site2clust.out$pp.list[[1]],3)
+```
+
+and to force an exact allocation to the clusters using the maximum of row *a*, write
+
+```{r alloc, eval = FALSE}
+pp.mat <- site2clust.out$pp.list[[1]]
+split(rownames(pp.mat),apply(pp.mat,1,which.max))
+```
+
+which gives a list showing which sites are in each cluster:
+
+
+
+A profile plot shows y = interaction effect (on the link scale) after allowing for main effects. The x axis has all species and the traces are the site clusters. This indicates which species occur more often or less often than expected (from the main effects); there is one profile (trace factor) for each group of sites. The following code does a profile plot and saves a data frame of coordinates used in the plot.
+
+```{r profile1, results="hold", cache=TRUE, eval=FALSE}
+?profileplot
+plotting.df <- profileplot(model = site2clust.out,
+                           x.factor = "species",
+                           trace.factor = "siteclust")
+round(plotting.df,3)
+```
+
+For a more informative plot, add a legend and sort the species to give ascending values of siteclust1:
+
+
+```{r profile2, results="hold", cache=TRUE, eval=FALSE}
+plotting.df <- profileplot(model = site2clust.out,
+                           x.factor = "species",
+                           trace.factor = "siteclust",
+                           sort.x = 1, legend = TRUE)
+```
+
+This model with two site clusters may also be used to show an ordination of the species (Pledger and Arnold, 2014). The values in the `profile.df` data frame are plotted in the plane with coordinates x from the first column and y from the second. There is one point per species, and constraints in the model fitting imply that the points are all on a line. Just one coordinate may be used to illustrate the 1-D ordination. 
+
+```{r ord1, eval = FALSE}
+?ordplot
+ord.df <- ordplot(model = site2clust.out,
+                  ord.factor = "species",
+		  clust.factor = "siteclust")
+```
+
+A more interesting ordination plot in 2D is obtained from a single-mode clustering with three clusters.
+
+```{r ex2b3, results="hold", cache=TRUE, eval=FALSE}
+site3clust.out <- clustglm(formula = count ~ site + species + siteclust:species,
+                           family = "poisson",
+			   data = avi.df,
+                           fact4clust = "site",
+			   nclust = 3,
+			   clustfactnames = "siteclust",
+                           start.control = list(randstarts = 100),
+                           verbose = 0)
+ord.df <- ordplot(model = site3clust.out,
+                  ord.factor = "species",
+		  clust.factor = "siteclust")
+```
+
+
+Still to do: Travelling salesman version of profile plot
+
+
+
+Still to do: AIC on a vector of models, AIC(std2way.glm,siteclust.out)
+
+
+
+## Example 2c: species clustering using site information
+
+In the same way single-mode clustering may be done on the species using information over all the sites, after allowing for main effects. This is similar to Example 1b, but with "site" and "species" interchanged.
+
+
+```{r ex2c, results="hold", cache=TRUE, eval=FALSE} 
+species2clust.out <- clustglm(formula = count ~ site + species + site:speciesclust,
+                              family = "poisson", data = avi.df,
+			      fact4clust = "species", nclust = 2,
+			      clustfactnames = "speciesclust",
+			      start.control = list(randstarts = 100),
+			      verbose = 1)
+```
+
+Profile plots and ordination plots may be done as for the site-clustered models.
+
+
+
+## Example 2d: biclustering
+
+In a simultaneous clustering of sites and species, biclustering, each clustering influences the other. A sequence of reciprocal updating finds a compromise solution. Starts using `hclust` or `diana` are not available, as they are restricted to single-mode clustering. With the large search space, it is often better to start from good single-mode clusterings and allow the EM algorithm to adjust to the compromise solution from there. Here we use the posterior probability matrices from two single-mode clusterings.
+
+```{r ex2d, results="hold", cache=TRUE, eval=FALSE}
+pp.start <- list(site2clust.out$pp.list[[1]], species2clust.out$pp.list[[1]])
+
+si2sp2biclust.out <- clustglm(formula = count ~ site + species + siteclust:speciesclust,
+                              family = "poisson",
+			      data = avi.df,
+			      fact4clust = c("site","species"),
+			      nclust = c(2,2),
+			      clustfactnames = c("siteclust","speciesclust"),
+			      start.control = list(alloc = pp.start),
+			      verbose = 1)
+names(si2sp2biclust.out)
+si2sp2biclust.out$LLint
+si2sp2biclust.out$AIC
+si2sp2biclust.out$BIC
+pp.mat1 <- si2sp2biclust.out$pp.list[[1]]
+split(rownames(pp.mat1),apply(pp.mat1,1,which.max))
+pp.mat2 <- si2sp2biclust.out$pp.list[[2]]
+split(rownames(pp.mat2),apply(pp.mat2,1,which.max))
+```
+
+The LL is not as high as for the single-mode clusterings, but the AIC or BIC may be lower becuse of the saving in parameters.
+
+
+## Example 2e: clustering with covariates
+
+Substitute feeding habit for species in the site-clustering model (Example 2b). After allowing for main effects of "site" and "species", the interaction of two site clusters by four feeding habits ensures that the species' feeding habits are driving the site clusters.
+
+```{r ex2e, results="hold", cache=TRUE, eval=FALSE}
+siteclust.feed.out <- clustglm(formula = count ~ site + species + siteclust:feed.hab,
+                               family = "poisson", data = avi.df,
+			       fact4clust = "site", nclust = 2,
+			       clustfactnames = "siteclust",
+			       start.control = list(randstarts = 100),
+			       alloc = list(site2clust.out$pp.list[[1]])),
+			       verbose = 1)
+siteclust.feed.out$LLint
+siteclust.feed.out$AIC
+siteclust.feed.out$BIC
+round(siteclust.feed.out$pp.list[[1]],3)
+```
+ 
+This model fails to separate site clusters. LL is the same as for the basic glm (Example 1). A more informative covariate could give a higher LL.
+
+
+
+## Example 2f: covariates only, no clustering
+
+This is a regular glm. Use `farms` for the "site" factor  (two levels, presence/absence) and `feed` for the "species"" trait (four levels). It evaluates associations between site factors and species traits, as in the fourth corner problem (Brown et al, 2014).
+
+```{r ex2f, results="hold", cache=TRUE, eval=FALSE}
+farms.feed.out <- clustglm(formula = count ~ site + species + farms:feed.hab,	  
+                           family = "poisson", data = avi.df)
+farms.feed.out$LL
+farms.feed.out$AIC
+farms.feed.out$BIC
+```
+
+This model may be compared with others, using AIC or BIC, to decide if any clustering at all is needed when these covariates are available.
+A comparison of all the models fitted so far may be done using the function `comparison`.
+
+
+## Comments
+
+The option `startEMcycles = 3` in `EM.control`, combined with plenty of random starts, behaves somewhat like simulated annealing, giving the chance to range over different starts and replace the existing best start. For moderately sized data sets, this method exploits the fact that the EM algorithm makes fast progress to a local maximum in its first few steps, only slowing down as it approaches the maximum. 
+
+
+
+# References
+
+Brown, A. M., Warton, D. I., Andrew, N. R., Binns, M., Cassis, G. and Gibb, H. (2014)
+The fourth-corner solution – using predictive models to understand how species traits interact with the
+environment. *Methods in Ecology and Evolution* **5**, 344 -- 352.
+
+Dolédec, S., Chessel, D., Ter Braak, C. J. F. and Champely S. (1996) Matching species traits to environmental variables: a new three-table ordination method. 
+*Environmental and Ecological Statistics* **3**, 143--166.
+
+Dray, S. and Dufour, A. B. (2007) The ade4 package: implementing the duality
+diagram for ecologists. *Journal of Statistical Software* **22**, 1 -- 20.
+
+Edwards, W. R. and Eberhardt, L. (1966) Estimating cottontail abundance from livetrapping data. *The Journal of Wildlife Management* **31 (1)**, 87 -- 96.
+  
+McCullagh, P. and Nelder, J. A. (1989) *Generalized Linear Models.* 2nd Edition. 
+Chapman and Hall/CRC
+
+McLachlan, G. J. and Basford, K. E. (1988) *Mixture Models: Inference and Applications to Clustering.* Marcel Dekker, New York.
+
+O'Neill, R. and Wetherill, G. B. (1971) The present state of multiple comparison methods (with discussion). *Journal of the Royal Statistical Society (B)*, **33**, 218--250.
+
+Pledger, S. and Arnold, R. (2014) Multivariate methods using mixtures:
+Correspondence analysis, scaling and pattern-detection. 
+*Computational Statistics and Data Analysis* **71**, 241--261.
+
+
+
+[ade4]: https://CRAN.R-project.org/package=ade4
+[simpolyfigure]: simpoly.png
