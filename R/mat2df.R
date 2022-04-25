@@ -1,5 +1,5 @@
 ## mat2df.R
-
+#' @export
 mat2df <- function(y, ntrials = NULL, xr.df = NULL, xc.df = NULL,
                    responsename = "Y",
                    factorname1 = "facA",
