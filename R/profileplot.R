@@ -82,12 +82,13 @@ profileplot <- function(model, x.factor, trace.factor,
 
     ## Set up varying line widths if required:
     if (!is.null(lwd)){
-        if (lwd == "vary"){
-            if (trace.factor == this.model$clustfactnames[1]){
-                pi.v <- this.model$pi.list[[1]]
-            }
-            if (length(this.model$nclust) == 2){
-                if (trace.factor == this.model$clustfactnames[2]){
+        if (length(lwd) == 1 && lwd == "vary"){
+            if (length(this.model$nclust) == 1) {
+                pi.v <- this.model$pi.ests
+            } else if (length(this.model$nclust) == 2){
+                if (trace.factor == this.model$clustfactnames[1]){
+                    pi.v <- this.model$pi.list[[1]]
+                } else if (trace.factor == this.model$clustfactnames[2]){
                     pi.v <- this.model$pi.list[[2]]
                 }
             }
