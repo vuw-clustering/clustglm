@@ -4,7 +4,7 @@ author: "Louise McMillan"
 date: "`r Sys.Date()`"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteIndexEntry{Performing pure clustering with clustglm}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -100,14 +100,14 @@ The data was generated in 2 clusters: cluster #1 contains the first 20 rows, and
 Using the notation of Pledger and Arnold (2014), we have parameters $\theta_{rj}$ and $\theta_{1j} = 0.9$ and $\theta_{2j} = 0.1$ for all j in $1,2,\ldots,16$.
 
 ```{r}
-dat
+dat[1:5,1:5]
 ```
 
 The first step in the process is to convert the data into the long format, with 1 row for every cell in the matrix, and 1 column giving the indices of the original rows in the matrix, and 1 column giving the indices of the original columns in the matrix.
 
 ```{r}
 longdat <- mat2df(dat)
-longdat
+head(longdat)
 ```
 
 Then we convert the binary data to binomial data, which is one of the available distribution families in the `clustglm` package. Every entry has 1 trial, and the binary value is the number of successes.
@@ -116,7 +116,7 @@ Then we convert the binary data to binomial data, which is one of the available 
 longdat$ntrials <- rep(1,nrow(longdat))
 longdat$nsucc <- longdat$Y
 longdat$nfail <- 1-longdat$Y
-longdat
+head(longdat)
 ```
 
 Now we can apply row clustering to this dataset. Since the column in the long format that gives the indices of the rows in the original matrix is called "ROW", that is the name of the factor that we want to cluster, i.e. `fact4clust="ROW"`. 
@@ -129,7 +129,7 @@ At this stage we test the algorithm, specifying that we want 2 row clusters.
 set.seed(1)
 ```
 
-```{r, results="hide"}
+```{r, results="hide", warning=FALSE}
 row2clustonly.out <- clustglm(Y~rowclust, family="binomial", data=longdat,
                                   fact4clust = "facA", nclus=2, clustfactnames = "rowclust",
                                   start.control = list(randstarts=10))
@@ -183,9 +183,9 @@ longdat
 set.seed(1)
 ```
 
-```{r, results="hide"}
+```{r, results="hide", warning=FALSE}
 row2clustonly.out <- clustglm(Y~rowclust*colclust, family="binomial", data=longdat,
-                                  fact4clust = c("ROW","COL"), nclus=c(2,2), 
+                                  fact4clust = c("facA","facB"), nclus=c(2,2), 
                                   clustfactnames = c("rowclust","colclust"),
                                   start.control = list(randstarts=10))
 ```

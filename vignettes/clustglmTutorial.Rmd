@@ -15,6 +15,10 @@ vignette: >
 <!-- # knitr::opts_chunk$set(eval=FALSE) -->
 <!-- # ``` -->
 
+```{r, include=FALSE}
+library(clustglm)
+```
+
 # Introduction
 
 The package **clustglm** uses a function `clustglm()` to link finite-mixture clustering and biclustering (Pledger and Arnold, 2014) with generalized linear models (McCullagh and Nelder, 1989). A data frame with a response variable **Y** and factor **A** may have the levels of **A** clustered to share parameters in a generalized linear model. This has long been regarded as a good alternative to the multiple comparison procedures used in ANOVA (O'Neill and Wetherill, 1971). Similar **single-mode clustering** may be done for other factors, **B**, **C**, etc. Further, a simultaneous clustering of the levels of **A** and **B** (a **biclustering**) may also be done. All the usual model fitting and parameter estimates (as in the function `glm()`) are available, together with posterior probabilities for classification of the factor levels from using finite mixture models (see e.g. McLachlan and Basford, 1988). Covariates **X_1**, ... **X_q**, whether categorical or numerical, may also be included in the model formula. Advantages of this combination of mixtures and generalized linear models include the model-comparison methodology arising from likelihood-based analyses and the extension from Gaussian models to other members of the exponential family.
@@ -85,7 +89,7 @@ Data for `clustglm()` are provided as a data frame, just as for `glm()`. The dat
 
 This example illustrates the analysis of binomial data with a single factor, the levels of which are to be clustered. Edwards and Eberhardt (1967) presented a closed-population capture-recapture data study with 18 samples of a population of cottontail rabbits (*Sylvilagus floridanus*). Each of the 76 rabbits caught at least once has a capture history vector of length 18 containing a 1 at each sample when caught, otherwise zero. The individuals may be clustered by their propensity for recapture, using a binomial model where for each individual `nsucc` is the number of recaptures after the first, `ntrials` is the number of remaining occasions for possible recapture and `nfail = ntrials - nsucc` is the number of failures to recapture. The data frame `cottontails` with four columns, `ID` (a factor to identify individuals), `nsucc`, `nfail` and `ntrials` has only 74 rows, as two individuals were first caught at Sample 18 and hence had no opportunities for recapture. A preliminary `glm()` null model is fitted, assuming all individuals have the same constant probability of recapture.
 
-```{r ex1a, results="hold", cache=TRUE, eval=FALSE}
+```{r ex1a, results="hold", cache=TRUE}
 data(cottontails)
 str(cottontails)
 glm.null <- glm(formula = cbind(nsucc,nfail) ~ 1,
@@ -98,7 +102,7 @@ logLik(glm.null)
 
 Note that the deviance is **not** -2*logLik; this is because `glm()` omits a constant when reporting `logLik`. Models fitted using function `clustglm()` have the correct log likelihood as an item "LL" in the output list if there was no clustering. If there was clustering, then the model contains items "LLint", which is the incomplete-data log-likelihood, i.e. the standard log-likelihood, and "LLc", which is the complete-data log-likelihood as used to fit the clustering mixture model using the EM algorithm.
 
-```{r ex1b, results="hold", cache=TRUE, eval=FALSE}
+```{r ex1b, results="hold", cache=TRUE}
 data(cottontails)
 str(cottontails)
 clustglm.null <- clustglm(formula = cbind(nsucc,nfail) ~ rep(1,74),
@@ -113,7 +117,7 @@ This now has deviance = -2*LL. If AIC or BIC comparisons between clustered and u
 
 Now cluster the levels of factor **ID** into two clusters.
 
-```{r ex1c, results="hold", cache=TRUE, eval=FALSE}
+```{r ex1c, results="hold", cache=TRUE, warning=FALSE, message=FALSE}
 cg.2clust <- clustglm(formula = cbind(nsucc,nfail) ~ IDclust,
                        family = "binomial",
          	       data = cottontails,
